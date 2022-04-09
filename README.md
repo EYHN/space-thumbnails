@@ -21,7 +21,7 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 
 #### **[Download From Github Release](https://github.com/EYHN/space-thumbnails/releases)**
 
-[![](https://img.shields.io/github/v/release/eyhn/space-thumbnails)](https://github.com/EYHN/space-thumbnails/releases)
+[![](https://img.shields.io/github/v/release/eyhn/space-thumbnails?display_name=tag&sort=semver)](https://github.com/EYHN/space-thumbnails/releases)
 
 ### No thumbnails showing
 
