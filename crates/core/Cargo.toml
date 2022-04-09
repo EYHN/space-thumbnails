@@ -1,0 +1,14 @@
+[package]
+name = "space-thumbnails"
+version = "0.1.1"
+edition = "2021"
+
+[dependencies]
+filament-bindings = "0.2.1"
+
+[dev-dependencies]
+image = "0.24"
+test-results = "0.1"
+
+[lib]
+crate-type = ["lib"]

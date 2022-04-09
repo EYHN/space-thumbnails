@@ -1,0 +1,25 @@
+[package]
+name = "space-thumbnails-windows"
+version = "0.1.1"
+edition = "2021"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+space-thumbnails = { path = "../core" }
+lazy_static = "1.4"
+
+[dependencies.windows]
+version = "0.34.0"
+features = [
+  "alloc",
+  "implement",
+  "Win32_System_Com",
+  "Win32_System_SystemServices",
+  "Win32_System_LibraryLoader",
+  "Win32_Graphics_Gdi",
+  "Win32_Foundation",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_PropertiesSystem"
+]

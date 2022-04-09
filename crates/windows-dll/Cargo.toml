@@ -1,0 +1,13 @@
+[package]
+name = "space-thumbnails-windows-dll"
+version = "0.1.1"
+edition = "2021"
+
+[dependencies]
+windows = "0.34"
+space-thumbnails-windows = { path = "../windows" }
+space-thumbnails = { path = "../core" }
+winreg = "0.10"
+
+[lib]
+crate-type = ["cdylib"]
