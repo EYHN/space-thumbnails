@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cell::Cell, fs, path::Path, rc::Rc};
+use std::{cell::Cell, ffi::OsStr, fs, path::Path, rc::Rc};
 
 use filament_bindings::{
     assimp::AssimpAsset,
@@ -91,7 +91,7 @@ impl SpaceThumbnailsRenderer {
                 .sun_halo_falloff(80.0)
                 .build(&mut engine, &sunlight_entity)
                 .unwrap();
-            
+
             scene.add_entity(&sunlight_entity);
 
             view.set_camera(&mut camera);
@@ -133,22 +133,34 @@ impl SpaceThumbnailsRenderer {
         }
     }
 
-    pub fn load_asset_from_file(&mut self, filename: impl AsRef<Path>) -> Option<&mut Self> {
-        let extension = filename.as_ref().extension();
-
-        if matches!(extension, Some(e) if e == "gltf") {
-            self.load_gltf_asset(filename, false)
-        } else if matches!(extension, Some(e) if e == "glb") {
-            self.load_gltf_asset(filename, true)
+    pub fn load_asset_from_file(&mut self, filepath: impl AsRef<Path>) -> Option<&mut Self> {
+        if matches!(filepath.as_ref().extension(), Some(e) if e == "gltf" || e == "glb") {
+            let data = fs::read(&filepath).ok()?;
+            self.load_gltf_asset(
+                &data,
+                filepath.as_ref().file_name()?,
+                Some(filepath.as_ref()),
+            )
         } else {
-            let asset = AssimpAsset::from_file(&mut self.engine, filename).ok()?;
+            let asset = AssimpAsset::from_file(&mut self.engine, filepath).ok()?;
             self.load_assimp_asset(asset)
         }
     }
 
-    pub fn load_asset_from_memory(&mut self, buffer: &[u8], filename: &str) -> Option<&mut Self> {
-        let asset = AssimpAsset::from_memory(&mut self.engine, buffer, filename).ok()?;
-        self.load_assimp_asset(asset)
+    pub fn load_asset_from_memory(
+        &mut self,
+        buffer: &[u8],
+        filename: impl AsRef<OsStr>,
+    ) -> Option<&mut Self> {
+        if matches!(Path::new(filename.as_ref()).extension(), Some(e) if e == "gltf" || e == "glb")
+        {
+            self.load_gltf_asset(buffer, filename.as_ref(), None)
+        } else {
+            let asset =
+                AssimpAsset::from_memory(&mut self.engine, buffer, filename.as_ref().to_str()?)
+                    .ok()?;
+            self.load_assimp_asset(asset)
+        }
     }
 
     pub fn load_assimp_asset(&mut self, mut asset: AssimpAsset) -> Option<&mut Self> {
@@ -220,13 +232,15 @@ impl SpaceThumbnailsRenderer {
 
     pub fn load_gltf_asset(
         &mut self,
-        filename: impl AsRef<Path>,
-        binary: bool,
+        data: &[u8],
+        filename: &OsStr,
+        filepath: Option<&Path>,
     ) -> Option<&mut Self> {
         self.destory_opened_asset();
 
-        let filedata = fs::read(&filename).ok()?;
-        let filename_str = filename.as_ref().to_str()?;
+        let binary = matches!(Path::new(filename).extension(), Some(e) if e == "glb");
+
+        let filepath_str = filepath.and_then(|p| p.to_str().map(|s| s.to_owned()));
 
         unsafe {
             let materials = MaterialProvider::create_ubershader_loader(&mut self.engine)?;
@@ -240,14 +254,23 @@ impl SpaceThumbnailsRenderer {
             })?;
 
             let mut asset = if binary {
-                loader.create_asset_from_binary(&filedata)?
+                loader.create_asset_from_binary(&data)?
             } else {
-                loader.create_asset_from_json(&filedata)?
+                loader.create_asset_from_json(&data)?
             };
+
+            let uris = asset.get_resource_uris();
+            let has_external_resource = uris
+                .map(|uris| uris.into_iter().any(|uri| !is_base64_data_uri(&uri)))
+                .unwrap_or(false);
+
+            if filepath_str.is_none() && has_external_resource {
+                return None;
+            }
 
             ResourceLoader::create(ResourceConfiguration {
                 engine: &mut self.engine,
-                gltf_path: Some(filename_str.to_owned()),
+                gltf_path: filepath_str,
                 normalize_skinning_weights: true,
                 recompute_bounding_boxes: false,
                 ignore_bind_transform: false,
@@ -379,6 +402,10 @@ fn fit_into_unit_cube(bounds: &Aabb) -> Mat4f {
         * Mat4f::translation(center * -1.0)
 }
 
+fn is_base64_data_uri(uri: &str) -> bool {
+    uri.starts_with("data:") && uri.find(";base64,").is_some()
+}
+
 #[cfg(test)]
 mod test {
     use std::{fs, io::Cursor, path::PathBuf, str::FromStr, time::Instant};
@@ -388,7 +415,7 @@ mod test {
     use crate::{RendererBackend, SpaceThumbnailsRenderer};
 
     #[test]
-    fn render_test() {
+    fn render_file_test() {
         let models = fs::read_dir(
             PathBuf::from_str(env!("CARGO_MANIFEST_DIR"))
                 .unwrap()
@@ -427,7 +454,7 @@ mod test {
                 .unwrap();
             test_results::save!(
                 format!(
-                    "{}-screenshot.png",
+                    "render_file_test/{}-screenshot.png",
                     filepath
                         .file_name()
                         .unwrap()

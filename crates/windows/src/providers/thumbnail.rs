@@ -109,7 +109,10 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
         let timeout_result = run_timeout(
             move || {
                 let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
-                renderer.load_asset_from_memory(buffer.as_slice(), filename_hint)?;
+                renderer.load_asset_from_memory(
+                    buffer.as_slice(),
+                    format!("inmemory{}", filename_hint),
+                )?;
                 let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
                 renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
                 Some(screenshot_buffer)
