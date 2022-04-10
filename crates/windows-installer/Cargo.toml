@@ -3,7 +3,7 @@ name = "space-thumbnails-windows-installer"
 version = "0.1.1"
 edition = "2021"
 
-[build-dependencies]
+[dependencies]
 space-thumbnails-windows = { path = "../windows" }
 windows = "0.34.0"
 ureq = "2.4"
