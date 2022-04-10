@@ -1,8 +1,13 @@
 use std::{
-    io,
+    io, mem,
     sync::{atomic::AtomicBool, Arc},
     thread,
     time::{Duration, Instant},
+};
+
+use windows::Win32::{
+    Graphics::Gdi::{CreateDIBSection, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, HBITMAP, HDC},
+    System::Com::{IStream, STATSTG},
 };
 
 pub fn run_timeout<T: Send + 'static>(
@@ -34,4 +39,67 @@ pub fn run_timeout<T: Send + 'static>(
             continue;
         }
     }
+}
+
+pub struct WinStream {
+    stream: IStream,
+}
+
+impl WinStream {
+    pub fn size(&self) -> windows::core::Result<u64> {
+        unsafe {
+            let mut stats = STATSTG::default();
+            self.stream.Stat(&mut stats, 0)?;
+            Ok(stats.cbSize)
+        }
+    }
+}
+
+impl From<IStream> for WinStream {
+    fn from(stream: IStream) -> Self {
+        Self { stream }
+    }
+}
+
+impl io::Read for WinStream {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        let mut bytes_read = 0u32;
+        unsafe {
+            self.stream
+                .Read(buf.as_mut_ptr() as _, buf.len() as u32, &mut bytes_read)
+        }
+        .map_err(|err| {
+            std::io::Error::new(
+                io::ErrorKind::Other,
+                format!("IStream::Read failed: {}", err.code().0),
+            )
+        })?;
+        Ok(bytes_read as usize)
+    }
+}
+
+pub unsafe fn create_argb_bitmap(
+    width: u32,
+    height: u32,
+    p_bits: &mut *mut core::ffi::c_void,
+) -> HBITMAP {
+    let bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width as i32,
+            biHeight: -(height as i32),
+            biPlanes: 1,
+            biBitCount: 32,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    CreateDIBSection(
+        core::mem::zeroed::<HDC>(),
+        &bmi,
+        DIB_RGB_COLORS,
+        p_bits,
+        core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
+        0,
+    )
 }

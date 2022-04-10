@@ -2,7 +2,7 @@ use core::panic;
 use std::{cell::Cell, ffi::OsStr, fs, path::Path, rc::Rc};
 
 use filament_bindings::{
-    assimp::AssimpAsset,
+    assimp::{post_process, AssimpAsset},
     backend::{Backend, PixelBufferDescriptor, PixelDataFormat, PixelDataType},
     filament::{
         self, sRGBColor, Aabb, Camera, ClearOptions, Engine, Fov, IndirectLight,
@@ -18,6 +18,15 @@ use filament_bindings::{
 };
 
 const IDL_TEXTURE_DATA: &'static [u8] = include_bytes!("lightroom_14b_ibl.ktx");
+
+const ASSIMP_FLAGS: u32 = post_process::GEN_SMOOTH_NORMALS
+    | post_process::CALC_TANGENT_SPACE
+    | post_process::GEN_UV_COORDS
+    | post_process::FIND_INSTANCES
+    | post_process::OPTIMIZE_MESHES
+    | post_process::IMPROVE_CACHE_LOCALITY
+    | post_process::SORT_BY_P_TYPE
+    | post_process::TRIANGULATE;
 
 pub struct SpaceThumbnailsRenderer {
     // need release
@@ -142,7 +151,8 @@ impl SpaceThumbnailsRenderer {
                 Some(filepath.as_ref()),
             )
         } else {
-            let asset = AssimpAsset::from_file(&mut self.engine, filepath).ok()?;
+            let asset =
+                AssimpAsset::from_file_with_flags(&mut self.engine, filepath, ASSIMP_FLAGS).ok()?;
             self.load_assimp_asset(asset)
         }
     }
@@ -156,9 +166,13 @@ impl SpaceThumbnailsRenderer {
         {
             self.load_gltf_asset(buffer, filename.as_ref(), None)
         } else {
-            let asset =
-                AssimpAsset::from_memory(&mut self.engine, buffer, filename.as_ref().to_str()?)
-                    .ok()?;
+            let asset = AssimpAsset::from_memory_with_flags(
+                &mut self.engine,
+                buffer,
+                filename.as_ref().to_str()?,
+                ASSIMP_FLAGS,
+            )
+            .ok()?;
             self.load_assimp_asset(asset)
         }
     }
@@ -423,8 +437,6 @@ mod test {
         )
         .unwrap();
 
-        let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, 800, 800);
-
         for entry in models {
             let entry = entry.unwrap();
 
@@ -434,6 +446,11 @@ mod test {
 
             let filepath = entry.path();
             let filename = filepath.file_name().unwrap().to_str().unwrap();
+
+            let now = Instant::now();
+            let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, 800, 800);
+            let elapsed = now.elapsed();
+            println!("Initialize renderer, Elapsed: {:.2?}", elapsed);
 
             let now = Instant::now();
             renderer.load_asset_from_file(&filepath).unwrap();

@@ -1,4 +1,4 @@
-use std::{cell::Cell, io::Read, mem::size_of, time::Duration};
+use std::{cell::Cell, io, time::Duration};
 
 use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
@@ -12,9 +12,9 @@ use windows::{
 };
 
 use crate::{
+    constant::{ERROR_256X256_ARGB, TIMEOUT_256X256_ARGB, TOOLARGE_256X256_ARGB},
     registry::{register_clsid, RegistryData, RegistryKey, RegistryValue},
-    utils::run_timeout,
-    win_stream::WinStream,
+    utils::{create_argb_bitmap, run_timeout, WinStream},
 };
 
 use super::Provider;
@@ -98,9 +98,28 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             .stream
             .take()
             .ok_or(windows::core::Error::from(E_FAIL))?;
+
+        let filesize = stream.size()?;
+
+        if filesize > 300 * 1024 * 1024
+        /* 300 MB */
+        {
+            unsafe {
+                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
+                std::ptr::copy(
+                    TOOLARGE_256X256_ARGB.as_ptr(),
+                    p_bits as *mut _,
+                    TOOLARGE_256X256_ARGB.len(),
+                );
+                phbmp.write(hbmp);
+                pdwalpha.write(WTSAT_ARGB);
+            }
+            return Ok(());
+        }
+
         let mut buffer = Vec::new();
-        stream
-            .read_to_end(&mut buffer)
+        io::Read::read_to_end(&mut stream, &mut buffer)
             .ok()
             .ok_or(windows::core::Error::from(E_FAIL))?;
 
@@ -122,26 +141,8 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
 
         if let Ok(Some(screenshot_buffer)) = timeout_result {
             unsafe {
-                let bmi = BITMAPINFO {
-                    bmiHeader: BITMAPINFOHEADER {
-                        biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                        biWidth: cx as i32,
-                        biHeight: -(cx as i32),
-                        biPlanes: 1,
-                        biBitCount: 32,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                };
                 let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-                let hbmp = CreateDIBSection(
-                    core::mem::zeroed::<HDC>(),
-                    &bmi,
-                    DIB_RGB_COLORS,
-                    &mut p_bits,
-                    core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
-                    0,
-                );
+                let hbmp = create_argb_bitmap(cx, cx, &mut p_bits);
                 for x in 0..cx {
                     for y in 0..cx {
                         let index = ((x * cx + y) * 4) as usize;
@@ -157,8 +158,32 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
                 pdwalpha.write(WTSAT_ARGB);
             }
             Ok(())
+        } else if matches!(timeout_result, Err(err) if err.kind() == io::ErrorKind::TimedOut) {
+            unsafe {
+                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
+                std::ptr::copy(
+                    TIMEOUT_256X256_ARGB.as_ptr(),
+                    p_bits as *mut _,
+                    TIMEOUT_256X256_ARGB.len(),
+                );
+                phbmp.write(hbmp);
+                pdwalpha.write(WTSAT_ARGB);
+            }
+            Ok(())
         } else {
-            Err(windows::core::Error::from(E_FAIL))
+            unsafe {
+                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
+                std::ptr::copy(
+                    ERROR_256X256_ARGB.as_ptr(),
+                    p_bits as *mut _,
+                    ERROR_256X256_ARGB.len(),
+                );
+                phbmp.write(hbmp);
+                pdwalpha.write(WTSAT_ARGB);
+            }
+            Ok(())
         }
     }
 }

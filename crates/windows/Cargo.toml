@@ -23,3 +23,6 @@ features = [
   "Win32_UI_Shell",
   "Win32_UI_Shell_PropertiesSystem"
 ]
+
+[build-dependencies]
+image = "0.24"

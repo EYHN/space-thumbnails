@@ -46,3 +46,7 @@ lazy_static! {
         ))
     ];
 }
+
+pub const ERROR_256X256_ARGB: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/error256x256.bin"));
+pub const TIMEOUT_256X256_ARGB: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/timeout256x256.bin"));
+pub const TOOLARGE_256X256_ARGB: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/toolarge256x256.bin"));

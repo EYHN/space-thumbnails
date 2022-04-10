@@ -27,7 +27,6 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 
 **Ensure thumbnails are generally enabled.** Are thumbnails working with other file types on your system, e.g. photos? If not, you may have disabled them altogether.
 
-
 1. open any folder
 2. open the `Folder Options`
 
@@ -38,14 +37,22 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 3. Select the `View` tab
 4. in `Advanced settings`, make sure the `Always show icons, never thumbnails` option is not checked
 
-
-
 **Clear your thumbnail cache.** This forces Explorer to request new thumbnails instead of relying on outdated data.
 
 1. click the `Start` button and type `cleanmgr.exe`
 2. select drive `C:` and confirm
 3. check `Thumbnails` and confirm
 4. reboot
+
+### Speed
+
+Rendering thumbnails for 3D models may not be that fast. To keep your explorer smooth and available, we have made some limits here, if the model file size is larger than `300MB` or takes longer than `5 seconds` to load and render, it will be cancelled and display this image below.
+
+<img src="crates/windows/assets/timeout256x256.png" width="100px" />
+
+If there is an error loading the file (corrupt or illegal file), it will display this image below.
+
+<img src="crates/windows/assets/error256x256.png" width="100px" />
 
 ## Links
 

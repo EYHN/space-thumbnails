@@ -393,9 +393,9 @@ dependencies = [
 
 [[package]]
 name = "filament-bindings"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e145118476967672593f62423ace40fcb5e9be2fd307eef0d4f697ea9673b03"
+checksum = "293c8a3a4964614b9d9af38b6579166f425c117925cfd25ab5a00309affdb129"
 dependencies = [
  "bindgen",
  "bitflags",
@@ -1205,6 +1205,7 @@ dependencies = [
 name = "space-thumbnails-windows"
 version = "0.1.1"
 dependencies = [
+ "image",
  "lazy_static",
  "space-thumbnails",
  "windows",
