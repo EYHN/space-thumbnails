@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 windows = "0.34"
 space-thumbnails-windows = { path = "../windows" }
-space-thumbnails = { path = "../core" }
 winreg = "0.10"
 
 [lib]

@@ -1,17 +1,21 @@
-use std::{cell::RefCell, io::Read, mem::size_of};
+use std::{cell::Cell, io::Read, mem::size_of, time::Duration};
 
-use space_thumbnails::{SpaceThumbnailsRenderer, RendererBackend};
+use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
     core::{implement, IUnknown, Interface, GUID},
     Win32::{
-        Foundation::{ERROR_ALREADY_INITIALIZED, E_FAIL},
+        Foundation::E_FAIL,
         Graphics::Gdi::*,
         System::Com::*,
         UI::Shell::{PropertiesSystem::*, *},
     },
 };
 
-use crate::{registry::{register_clsid, RegistryKey, RegistryValue, RegistryData}, win_stream::WinStream};
+use crate::{
+    registry::{register_clsid, RegistryData, RegistryKey, RegistryValue},
+    utils::run_timeout,
+    win_stream::WinStream,
+};
 
 use super::Provider;
 
@@ -65,7 +69,7 @@ impl Provider for ThumbnailProvider {
 )]
 pub struct ThumbnailHandler {
     filename_hint: &'static str,
-    stream: RefCell<Option<WinStream>>,
+    stream: Cell<Option<WinStream>>,
 }
 
 impl ThumbnailHandler {
@@ -76,7 +80,7 @@ impl ThumbnailHandler {
     ) -> windows::core::Result<()> {
         let unknown: IUnknown = ThumbnailHandler {
             filename_hint,
-            stream: RefCell::new(None),
+            stream: Cell::new(None),
         }
         .into();
         unsafe { unknown.query(&*riid, ppv_object).ok() }
@@ -90,9 +94,9 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
         phbmp: *mut HBITMAP,
         pdwalpha: *mut WTS_ALPHATYPE,
     ) -> windows::core::Result<()> {
-        let mut stream_ref = self.stream.borrow_mut();
-        let stream = stream_ref
-            .as_mut()
+        let mut stream = self
+            .stream
+            .take()
             .ok_or(windows::core::Error::from(E_FAIL))?;
         let mut buffer = Vec::new();
         stream
@@ -100,61 +104,67 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             .ok()
             .ok_or(windows::core::Error::from(E_FAIL))?;
 
-        let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
-        renderer
-            .load_asset_from_memory(buffer.as_slice(), self.filename_hint)
-            .unwrap();
-        let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
-        renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
+        let filename_hint = self.filename_hint;
 
-        unsafe {
-            let bmi = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER {
-                    biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                    biWidth: cx as i32,
-                    biHeight: -(cx as i32),
-                    biPlanes: 1,
-                    biBitCount: 32,
+        let timeout_result = run_timeout(
+            move || {
+                let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
+                renderer.load_asset_from_memory(buffer.as_slice(), filename_hint)?;
+                let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
+                renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
+                Some(screenshot_buffer)
+            },
+            Duration::from_secs(5),
+        );
+
+        if let Ok(Some(screenshot_buffer)) = timeout_result {
+            unsafe {
+                let bmi = BITMAPINFO {
+                    bmiHeader: BITMAPINFOHEADER {
+                        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+                        biWidth: cx as i32,
+                        biHeight: -(cx as i32),
+                        biPlanes: 1,
+                        biBitCount: 32,
+                        ..Default::default()
+                    },
                     ..Default::default()
-                },
-                ..Default::default()
-            };
-            let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-            let hbmp = CreateDIBSection(
-                core::mem::zeroed::<HDC>(),
-                &bmi,
-                DIB_RGB_COLORS,
-                &mut p_bits,
-                core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
-                0,
-            );
-            for x in 0..cx {
-                for y in 0..cx {
-                    let index = ((x * cx + y) * 4) as usize;
-                    let r = screenshot_buffer[index];
-                    let g = screenshot_buffer[index + 1];
-                    let b = screenshot_buffer[index + 2];
-                    let a = screenshot_buffer[index + 3];
-                    (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32)
-                        .write((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
+                };
+                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                let hbmp = CreateDIBSection(
+                    core::mem::zeroed::<HDC>(),
+                    &bmi,
+                    DIB_RGB_COLORS,
+                    &mut p_bits,
+                    core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
+                    0,
+                );
+                for x in 0..cx {
+                    for y in 0..cx {
+                        let index = ((x * cx + y) * 4) as usize;
+                        let r = screenshot_buffer[index];
+                        let g = screenshot_buffer[index + 1];
+                        let b = screenshot_buffer[index + 2];
+                        let a = screenshot_buffer[index + 3];
+                        (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32)
+                            .write((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
+                    }
                 }
+                phbmp.write(hbmp);
+                pdwalpha.write(WTSAT_ARGB);
             }
-            phbmp.write(hbmp);
-            pdwalpha.write(WTSAT_ARGB);
+            Ok(())
+        } else {
+            Err(windows::core::Error::from(E_FAIL))
         }
-        Ok(())
     }
 }
 
 impl IInitializeWithStream_Impl for ThumbnailHandler {
     fn Initialize(&self, pstream: &Option<IStream>, _grfmode: u32) -> windows::core::Result<()> {
         if let Some(stream) = pstream {
-            if let Ok(mut handle_stream) = self.stream.try_borrow_mut() {
-                *handle_stream = Some(WinStream::from(stream.to_owned()));
-                Ok(())
-            } else {
-                Err(ERROR_ALREADY_INITIALIZED.into())
-            }
+            self.stream.set(Some(WinStream::from(stream.to_owned())));
+            Ok(())
         } else {
             Err(E_FAIL.into())
         }

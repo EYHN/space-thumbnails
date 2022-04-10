@@ -57,13 +57,6 @@ fn main() {
             .to_str()
             .unwrap()
     ));
-    wix.push_str(&format!(
-        "        <File Id=\"MainCliFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
-        project_dir
-            .join("target\\release\\space-thumbnails-cli.exe")
-            .to_str()
-            .unwrap()
-    ));
 
     for key in registy_keys {
         wix.push_str(&format!(

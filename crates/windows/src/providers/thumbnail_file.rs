@@ -1,10 +1,12 @@
-use std::{cell::RefCell, ffi::OsString, mem::size_of, os::windows::prelude::OsStringExt};
+use std::{
+    cell::Cell, ffi::OsString, mem::size_of, os::windows::prelude::OsStringExt, time::Duration,
+};
 
 use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
     core::{implement, IUnknown, Interface, GUID},
     Win32::{
-        Foundation::{ERROR_ALREADY_INITIALIZED, E_FAIL},
+        Foundation::E_FAIL,
         Graphics::Gdi::{
             CreateDIBSection, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, HBITMAP, HDC,
         },
@@ -15,7 +17,10 @@ use windows::{
     },
 };
 
-use crate::registry::{register_clsid, RegistryData, RegistryKey, RegistryValue};
+use crate::{
+    registry::{register_clsid, RegistryData, RegistryKey, RegistryValue},
+    utils::run_timeout,
+};
 
 use super::Provider;
 
@@ -68,7 +73,7 @@ impl Provider for ThumbnailFileProvider {
     windows::Win32::UI::Shell::PropertiesSystem::IInitializeWithFile
 )]
 pub struct ThumbnailFileHandler {
-    filepath: RefCell<Option<String>>,
+    filepath: Cell<String>,
 }
 
 impl ThumbnailFileHandler {
@@ -77,7 +82,7 @@ impl ThumbnailFileHandler {
         ppv_object: *mut *mut core::ffi::c_void,
     ) -> windows::core::Result<()> {
         let unknown: IUnknown = ThumbnailFileHandler {
-            filepath: RefCell::new(None),
+            filepath: Cell::new(String::new()),
         }
         .into();
         unsafe { unknown.query(&*riid, ppv_object).ok() }
@@ -91,52 +96,63 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
         phbmp: *mut HBITMAP,
         pdwalpha: *mut WTS_ALPHATYPE,
     ) -> windows::core::Result<()> {
-        let mut filepath_ref = self.filepath.borrow_mut();
-        let filepath = filepath_ref
-            .as_mut()
-            .ok_or(windows::core::Error::from(E_FAIL))?;
+        let filepath = self.filepath.take();
 
-        let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
-        renderer.load_asset_from_file(filepath).unwrap();
-        let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
-        renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
-
-        unsafe {
-            let bmi = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER {
-                    biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                    biWidth: cx as i32,
-                    biHeight: -(cx as i32),
-                    biPlanes: 1,
-                    biBitCount: 32,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-            let hbmp = CreateDIBSection(
-                core::mem::zeroed::<HDC>(),
-                &bmi,
-                DIB_RGB_COLORS,
-                &mut p_bits,
-                core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
-                0,
-            );
-            for x in 0..cx {
-                for y in 0..cx {
-                    let index = ((x * cx + y) * 4) as usize;
-                    let r = screenshot_buffer[index];
-                    let g = screenshot_buffer[index + 1];
-                    let b = screenshot_buffer[index + 2];
-                    let a = screenshot_buffer[index + 3];
-                    (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32)
-                        .write((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
-                }
-            }
-            phbmp.write(hbmp);
-            pdwalpha.write(WTSAT_ARGB);
+        if filepath.is_empty() {
+            return Err(windows::core::Error::from(E_FAIL));
         }
-        Ok(())
+
+        let timeout_result = run_timeout(
+            move || {
+                let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
+                renderer.load_asset_from_file(filepath)?;
+                let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
+                renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
+                Some(screenshot_buffer)
+            },
+            Duration::from_secs(5),
+        );
+
+        if let Ok(Some(screenshot_buffer)) = timeout_result {
+            unsafe {
+                let bmi = BITMAPINFO {
+                    bmiHeader: BITMAPINFOHEADER {
+                        biSize: size_of::<BITMAPINFOHEADER>() as u32,
+                        biWidth: cx as i32,
+                        biHeight: -(cx as i32),
+                        biPlanes: 1,
+                        biBitCount: 32,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                let hbmp = CreateDIBSection(
+                    core::mem::zeroed::<HDC>(),
+                    &bmi,
+                    DIB_RGB_COLORS,
+                    &mut p_bits,
+                    core::mem::zeroed::<windows::Win32::Foundation::HANDLE>(),
+                    0,
+                );
+                for x in 0..cx {
+                    for y in 0..cx {
+                        let index = ((x * cx + y) * 4) as usize;
+                        let r = screenshot_buffer[index];
+                        let g = screenshot_buffer[index + 1];
+                        let b = screenshot_buffer[index + 2];
+                        let a = screenshot_buffer[index + 3];
+                        (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32)
+                            .write((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
+                    }
+                }
+                phbmp.write(hbmp);
+                pdwalpha.write(WTSAT_ARGB);
+            }
+            Ok(())
+        } else {
+            Err(windows::core::Error::from(E_FAIL))
+        }
     }
 }
 
@@ -169,12 +185,8 @@ impl IInitializeWithFile_Impl for ThumbnailFileHandler {
             }
         };
         if let Some(filepath) = filepath {
-            if let Ok(mut handle_filepath) = self.filepath.try_borrow_mut() {
-                *handle_filepath = Some(filepath.to_owned());
-                Ok(())
-            } else {
-                Err(ERROR_ALREADY_INITIALIZED.into())
-            }
+            self.filepath.set(filepath);
+            Ok(())
         } else {
             Err(E_FAIL.into())
         }
