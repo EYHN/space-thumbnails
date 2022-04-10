@@ -47,6 +47,11 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 3. check `Thumbnails` and confirm
 4. reboot
 
+## Links
+
+* [google / filament](https://github.com/google/filament): 3D rendering engine, and [the rust bindings](https://github.com/EYHN/rust-filament)
+* [assimp](https://github.com/assimp/assimp): Asset import library, provides support for 3D file formats.
+
 ## License
 
 © 2022 [EYHN](https://github.com/EYHN)
