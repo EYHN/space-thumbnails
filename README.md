@@ -8,14 +8,14 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 
 ## Supported formats
 
-* Wavefront Object (`.obj`)
-* FBX-Format, as ASCII and binary (`.fbx`)
-* Stereolithography (`.stl`)
-* Collada (`.dae`)
-* Stanford Polygon Library (`.ply`)
-* glTF2.0 (`.glb`/`.glTF`)
-* Extensible 3D (`.x3d`/`.x3db`)
-* 3D Studio Max 3DS (`.3ds`)
+- Wavefront Object (`.obj`)
+- FBX-Format, as ASCII and binary (`.fbx`)
+- Stereolithography (`.stl`)
+- Collada (`.dae`)
+- Stanford Polygon Library (`.ply`)
+- glTF2.0 (`.glb`/`.glTF`)
+- Extensible 3D (`.x3d`/`.x3db`)
+- 3D Studio Max 3DS (`.3ds`)
 
 ## Windows Explorer Extensions
 
@@ -30,9 +30,9 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 1. open any folder
 2. open the `Folder Options`
 
-    * Windows 10: select `View` → `Options` → `Change folder and search options`
+   - Windows 10: select `View` → `Options` → `Change folder and search options`
 
-    * Windows 7: select `Organize` → `Folder and search options`
+   - Windows 7: select `Organize` → `Folder and search options`
 
 3. Select the `View` tab
 4. in `Advanced settings`, make sure the `Always show icons, never thumbnails` option is not checked
@@ -54,10 +54,16 @@ If there is an error loading the file (corrupt or illegal file), it will display
 
 <img src="crates/windows/assets/error256x256.png" width="100px" />
 
+### Logs
+
+Space Thumbnails saving the logs in `Windows Events`. To view the logs, you can open `Event Viewer`, right-click on the `Custom Views` folder in the left Console Tree, click `Create Custom View...`. and follow the steps below to create a custom view. You need to upload the logs here when you submit the issue.
+
+![](event-viewer.png)
+
 ## Links
 
-* [google / filament](https://github.com/google/filament): 3D rendering engine, and [the rust bindings](https://github.com/EYHN/rust-filament)
-* [assimp](https://github.com/assimp/assimp): Asset import library, provides support for 3D file formats.
+- [google / filament](https://github.com/google/filament): 3D rendering engine, and [the rust bindings](https://github.com/EYHN/rust-filament)
+- [assimp](https://github.com/assimp/assimp): Asset import library, provides support for 3D file formats.
 
 ## License
 
