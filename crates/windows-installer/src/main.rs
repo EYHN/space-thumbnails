@@ -5,8 +5,6 @@ use std::{env, fs, path::PathBuf, process::Command};
 use build_support::{download, run_command, unzip};
 use space_thumbnails_windows::constant::PROVIDERS;
 
-use windows::core::{ConstBuffer, GUID};
-
 fn main() {
     let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -57,6 +55,10 @@ fn main() {
     wix.push_str(&format!(
         "        <File Id=\"LicenceFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
         assets_dir.join("Licence.rtf").to_str().unwrap()
+    ));
+    wix.push_str(&format!(
+        "        <File Id=\"ReadmeFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
+        project_dir.join("README.md").to_str().unwrap()
     ));
     wix.push_str("        <util:EventSource EventMessageFile=\"[#MainDLLFile]\" Log=\"Application\" Name=\"Space Thumbnails\"/>\n");
 
