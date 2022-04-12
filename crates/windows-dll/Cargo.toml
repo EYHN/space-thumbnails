@@ -1,12 +1,15 @@
 [package]
 name = "space-thumbnails-windows-dll"
-version = "0.1.2"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]
 windows = "0.34"
 space-thumbnails-windows = { path = "../windows" }
 winreg = "0.10"
+eventlog = "0.1.1"
+log = "0.4"
+
 
 [lib]
 crate-type = ["cdylib"]

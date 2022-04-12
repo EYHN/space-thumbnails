@@ -1,5 +1,6 @@
 use std::{cell::Cell, io, time::Duration};
 
+use log::info;
 use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
     core::{implement, IUnknown, Interface, GUID},
@@ -100,6 +101,7 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             .ok_or(windows::core::Error::from(E_FAIL))?;
 
         let filesize = stream.size()?;
+        info!(target: "ThumbnailProvider", "Getting thumbnail from stream [{}], size: {}", self.filename_hint, filesize);
 
         if filesize > 300 * 1024 * 1024
         /* 300 MB */

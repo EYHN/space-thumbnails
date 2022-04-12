@@ -108,7 +108,7 @@ impl SpaceThumbnailsRenderer {
             renderer.set_clear_options(&ClearOptions {
                 clear_color: [0.0, 0.0, 0.0, 0.0].into(),
                 clear: true,
-                discard: true,
+                discard: false,
             });
 
             let viewport = Viewport {
@@ -436,6 +436,8 @@ mod test {
                 .join("models"),
         )
         .unwrap();
+
+        dbg!(std::env::temp_dir());
 
         for entry in models {
             let entry = entry.unwrap();

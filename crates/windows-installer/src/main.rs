@@ -26,14 +26,11 @@ fn main() {
     let registy_keys = PROVIDERS.iter().flat_map(|m| m.register("[#MainDLLFile]"));
 
     let version = env!("CARGO_PKG_VERSION");
-    let upgrade_code = GUID::from_signature(ConstBuffer::from_slice(
-        format!("Space Thumbnails{}", version).as_bytes(),
-    ));
 
     let mut wix = String::new();
     wix.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    wix.push_str("<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\">\n");
-    wix.push_str(&format!("  <Product Id=\"*\" UpgradeCode=\"{:?}\" Version=\"{}\" Language=\"1033\" Name=\"Space Thumbnails\" Manufacturer=\"EYHN\">\n", upgrade_code, version));
+    wix.push_str("<Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\" xmlns:util=\"http://schemas.microsoft.com/wix/UtilExtension\">\n");
+    wix.push_str(&format!("  <Product Id=\"*\" UpgradeCode=\"1C589985-B4C6-53EC-8483-112D02E6DCD2\" Version=\"{}\" Language=\"1033\" Name=\"Space Thumbnails\" Manufacturer=\"EYHN\">\n", version));
     wix.push_str(
         "    <Package InstallerVersion=\"300\" Compressed=\"yes\" InstallScope=\"perMachine\"/>\n",
     );
@@ -57,6 +54,11 @@ fn main() {
             .to_str()
             .unwrap()
     ));
+    wix.push_str(&format!(
+        "        <File Id=\"LicenceFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
+        assets_dir.join("Licence.rtf").to_str().unwrap()
+    ));
+    wix.push_str("        <util:EventSource EventMessageFile=\"[#MainDLLFile]\" Log=\"Application\" Name=\"Space Thumbnails\"/>\n");
 
     for key in registy_keys {
         wix.push_str(&format!(
@@ -111,6 +113,7 @@ fn main() {
         "    <WixVariable Id=\"WixUILicenseRtf\" Value=\"{}\" />\n",
         assets_dir.join("Licence.rtf").to_str().unwrap()
     ));
+    wix.push_str("    <MajorUpgrade AllowDowngrades=\"no\" AllowSameVersionUpgrades=\"no\" DowngradeErrorMessage=\"A newer version of [ProductName] is already installed.  If you are sure you want to downgrade, remove the existing installation via the Control Panel\" />\n");
     wix.push_str("  </Product>\n");
     wix.push_str("</Wix>\n");
 
@@ -130,7 +133,8 @@ fn main() {
     candle_command
         .current_dir(&build_dir)
         .arg(installerwxs.to_str().unwrap())
-        .args(["-arch", "x64"]);
+        .args(["-arch", "x64"])
+        .args(["-ext", "WixUtilExtension"]);
 
     run_command(&mut candle_command, "candle.exe");
 
@@ -138,14 +142,14 @@ fn main() {
     light_command
         .current_dir(&build_dir)
         .arg(build_dir.join("installer.wixobj"))
-        .args(["-ext", "WixUIExtension"]);
+        .args(["-ext", "WixUIExtension"])
+        .args(["-ext", "WixUtilExtension"]);
 
     run_command(&mut light_command, "light.exe");
 
     fs::copy(
         build_dir.join("installer.msi"),
-        out_dir
-            .join("space-thumbnails-installer.msi"),
+        out_dir.join("space-thumbnails-installer.msi"),
     )
     .unwrap();
 }

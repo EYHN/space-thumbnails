@@ -1,6 +1,6 @@
 [package]
 name = "space-thumbnails-windows"
-version = "0.1.2"
+version = "1.0.0"
 edition = "2021"
 
 [lib]
@@ -9,6 +9,7 @@ crate-type = ["lib"]
 [dependencies]
 space-thumbnails = { path = "../core" }
 lazy_static = "1.4"
+log = "0.4"
 
 [dependencies.windows]
 version = "0.34.0"

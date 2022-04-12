@@ -1,5 +1,6 @@
 use std::{cell::Cell, ffi::OsString, fs, io, os::windows::prelude::OsStringExt, time::Duration};
 
+use log::info;
 use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
     core::{implement, IUnknown, Interface, GUID},
@@ -94,6 +95,7 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
         pdwalpha: *mut WTS_ALPHATYPE,
     ) -> windows::core::Result<()> {
         let filepath = self.filepath.take();
+        info!(target: "ThumbnailProvider", "Getting thumbnail from file: {}", filepath);
 
         if filepath.is_empty() {
             return Err(windows::core::Error::from(E_FAIL));
@@ -112,7 +114,7 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
                 phbmp.write(hbmp);
                 pdwalpha.write(WTSAT_ARGB);
             }
-            return Ok(())
+            return Ok(());
         }
 
         let timeout_result = run_timeout(
