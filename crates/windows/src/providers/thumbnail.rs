@@ -1,6 +1,10 @@
-use std::{cell::Cell, io, time::Duration};
+use std::{
+    cell::Cell,
+    io,
+    time::{Duration, Instant},
+};
 
-use log::info;
+use log::{info, warn};
 use space_thumbnails::{RendererBackend, SpaceThumbnailsRenderer};
 use windows::{
     core::{implement, IUnknown, Interface, GUID},
@@ -101,8 +105,6 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             .ok_or(windows::core::Error::from(E_FAIL))?;
 
         let filesize = stream.size()?;
-        info!(target: "ThumbnailProvider", "Getting thumbnail from stream [{}], size: {}", self.filename_hint, filesize);
-
         if filesize > 300 * 1024 * 1024
         /* 300 MB */
         {
@@ -119,6 +121,9 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             }
             return Ok(());
         }
+
+        let start_time = Instant::now();
+        info!(target: "ThumbnailProvider", "Getting thumbnail from stream [{}], size: {}", self.filename_hint, filesize);
 
         let mut buffer = Vec::new();
         io::Read::read_to_end(&mut stream, &mut buffer)
@@ -141,51 +146,59 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
             Duration::from_secs(5),
         );
 
-        if let Ok(Some(screenshot_buffer)) = timeout_result {
-            unsafe {
-                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-                let hbmp = create_argb_bitmap(cx, cx, &mut p_bits);
-                for x in 0..cx {
-                    for y in 0..cx {
-                        let index = ((x * cx + y) * 4) as usize;
-                        let r = screenshot_buffer[index];
-                        let g = screenshot_buffer[index + 1];
-                        let b = screenshot_buffer[index + 2];
-                        let a = screenshot_buffer[index + 3];
-                        (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32)
-                            .write((a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32)
+        match timeout_result {
+            Ok(Some(screenshot_buffer)) => {
+                info!(target: "ThumbnailProvider", "Rendering thumbnails success [{}], Elapsed: {:.2?}", self.filename_hint, start_time.elapsed());
+                unsafe {
+                    let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                    let hbmp = create_argb_bitmap(cx, cx, &mut p_bits);
+                    for x in 0..cx {
+                        for y in 0..cx {
+                            let index = ((x * cx + y) * 4) as usize;
+                            let r = screenshot_buffer[index];
+                            let g = screenshot_buffer[index + 1];
+                            let b = screenshot_buffer[index + 2];
+                            let a = screenshot_buffer[index + 3];
+                            (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32).write(
+                                (a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32,
+                            )
+                        }
                     }
+                    phbmp.write(hbmp);
+                    pdwalpha.write(WTSAT_ARGB);
                 }
-                phbmp.write(hbmp);
-                pdwalpha.write(WTSAT_ARGB);
+                Ok(())
             }
-            Ok(())
-        } else if matches!(timeout_result, Err(err) if err.kind() == io::ErrorKind::TimedOut) {
-            unsafe {
-                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-                let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
-                std::ptr::copy(
-                    TIMEOUT_256X256_ARGB.as_ptr(),
-                    p_bits as *mut _,
-                    TIMEOUT_256X256_ARGB.len(),
-                );
-                phbmp.write(hbmp);
-                pdwalpha.write(WTSAT_ARGB);
+            Err(err) if err.kind() == io::ErrorKind::TimedOut => {
+                warn!(target: "ThumbnailProvider", "Rendering thumbnails timeout [{}], Elapsed: {:.2?}", self.filename_hint, start_time.elapsed());
+                unsafe {
+                    let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                    let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
+                    std::ptr::copy(
+                        TIMEOUT_256X256_ARGB.as_ptr(),
+                        p_bits as *mut _,
+                        TIMEOUT_256X256_ARGB.len(),
+                    );
+                    phbmp.write(hbmp);
+                    pdwalpha.write(WTSAT_ARGB);
+                }
+                Ok(())
             }
-            Ok(())
-        } else {
-            unsafe {
-                let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-                let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
-                std::ptr::copy(
-                    ERROR_256X256_ARGB.as_ptr(),
-                    p_bits as *mut _,
-                    ERROR_256X256_ARGB.len(),
-                );
-                phbmp.write(hbmp);
-                pdwalpha.write(WTSAT_ARGB);
+            Err(_) | Ok(None) => {
+                warn!(target: "ThumbnailProvider", "Rendering thumbnails error [{}], Elapsed: {:.2?}", self.filename_hint, start_time.elapsed());
+                unsafe {
+                    let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
+                    let hbmp = create_argb_bitmap(256, 256, &mut p_bits);
+                    std::ptr::copy(
+                        ERROR_256X256_ARGB.as_ptr(),
+                        p_bits as *mut _,
+                        ERROR_256X256_ARGB.len(),
+                    );
+                    phbmp.write(hbmp);
+                    pdwalpha.write(WTSAT_ARGB);
+                }
+                Ok(())
             }
-            Ok(())
         }
     }
 }
