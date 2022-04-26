@@ -2,7 +2,7 @@
 
 Generates preview thumbnails for 3D model files. Provide a Windows Explorer extensions that adds preview thumbnails for 3D model files.
 
-![](https://img.shields.io/github/downloads/eyhn/space-thumbnails/total)
+[![](https://img.shields.io/github/downloads/eyhn/space-thumbnails/total)](https://github.com/EYHN/space-thumbnails/releases)
 
 ![screenshot](./screenshot.png)
 
@@ -64,6 +64,7 @@ Space Thumbnails saving the logs in `Windows Events`. To view the logs, you can 
 
 - [google / filament](https://github.com/google/filament): 3D rendering engine, and [the rust bindings](https://github.com/EYHN/rust-filament)
 - [assimp](https://github.com/assimp/assimp): Asset import library, provides support for 3D file formats.
+- Thanks to @Shomnipotence for the icon design.
 
 ## License
 
