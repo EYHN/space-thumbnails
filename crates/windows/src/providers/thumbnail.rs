@@ -95,10 +95,11 @@ impl ThumbnailHandler {
 impl IThumbnailProvider_Impl for ThumbnailHandler {
     fn GetThumbnail(
         &self,
-        cx: u32,
+        _: u32,
         phbmp: *mut HBITMAP,
         pdwalpha: *mut WTS_ALPHATYPE,
     ) -> windows::core::Result<()> {
+        let size = 256;
         let mut stream = self
             .stream
             .take()
@@ -134,7 +135,7 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
 
         let timeout_result = run_timeout(
             move || {
-                let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
+                let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, size, size);
                 renderer.load_asset_from_memory(
                     buffer.as_slice(),
                     format!("inmemory{}", filename_hint),
@@ -151,15 +152,15 @@ impl IThumbnailProvider_Impl for ThumbnailHandler {
                 info!(target: "ThumbnailProvider", "Rendering thumbnails success [{}], Elapsed: {:.2?}", self.filename_hint, start_time.elapsed());
                 unsafe {
                     let mut p_bits: *mut core::ffi::c_void = core::ptr::null_mut();
-                    let hbmp = create_argb_bitmap(cx, cx, &mut p_bits);
-                    for x in 0..cx {
-                        for y in 0..cx {
-                            let index = ((x * cx + y) * 4) as usize;
+                    let hbmp = create_argb_bitmap(size, size, &mut p_bits);
+                    for x in 0..size {
+                        for y in 0..size {
+                            let index = ((x * size + y) * 4) as usize;
                             let r = screenshot_buffer[index];
                             let g = screenshot_buffer[index + 1];
                             let b = screenshot_buffer[index + 2];
                             let a = screenshot_buffer[index + 3];
-                            (p_bits.add(((x * cx + y) * 4) as usize) as *mut u32).write(
+                            (p_bits.add(((x * size + y) * 4) as usize) as *mut u32).write(
                                 (a as u32) << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32,
                             )
                         }
