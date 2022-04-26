@@ -31,13 +31,15 @@ use super::Provider;
 pub struct ThumbnailFileProvider {
     pub clsid: GUID,
     pub file_extension: &'static str,
+    pub backend: RendererBackend,
 }
 
 impl ThumbnailFileProvider {
-    pub fn new(clsid: GUID, file_extension: &'static str) -> Self {
+    pub fn new(clsid: GUID, file_extension: &'static str, backend: RendererBackend) -> Self {
         Self {
             clsid,
             file_extension,
+            backend,
         }
     }
 }
@@ -68,7 +70,7 @@ impl Provider for ThumbnailFileProvider {
         riid: *const windows::core::GUID,
         ppv_object: *mut *mut core::ffi::c_void,
     ) -> windows::core::Result<()> {
-        ThumbnailFileHandler::new(riid, ppv_object)
+        ThumbnailFileHandler::new(riid, ppv_object, self.backend)
     }
 }
 
@@ -78,15 +80,18 @@ impl Provider for ThumbnailFileProvider {
 )]
 pub struct ThumbnailFileHandler {
     filepath: Cell<String>,
+    backend: RendererBackend,
 }
 
 impl ThumbnailFileHandler {
     pub fn new(
         riid: *const GUID,
         ppv_object: *mut *mut core::ffi::c_void,
+        backend: RendererBackend,
     ) -> windows::core::Result<()> {
         let unknown: IUnknown = ThumbnailFileHandler {
             filepath: Cell::new(String::new()),
+            backend,
         }
         .into();
         unsafe { unknown.query(&*riid, ppv_object).ok() }
@@ -126,9 +131,10 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
         info!(target: "ThumbnailFileProvider", "Getting thumbnail from file: {}", filepath);
 
         let filepath_clone = filepath.clone();
+        let backend = self.backend;
         let timeout_result = run_timeout(
             move || {
-                let mut renderer = SpaceThumbnailsRenderer::new(RendererBackend::Vulkan, cx, cx);
+                let mut renderer = SpaceThumbnailsRenderer::new(backend, cx, cx);
                 renderer.load_asset_from_file(filepath_clone)?;
                 let mut screenshot_buffer = vec![0; renderer.get_screenshot_size_in_byte()];
                 renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
