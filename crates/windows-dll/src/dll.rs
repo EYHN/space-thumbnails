@@ -166,7 +166,15 @@ fn unregister() -> std::io::Result<()> {
                 RegistryRoot::ClassesRoot => RegKey::predef(HKEY_CLASSES_ROOT),
                 RegistryRoot::CurrentUser => RegKey::predef(HKEY_CURRENT_USER),
             };
-            root.delete_subkey_all(key.path).ok();
+            if key.delete_key_on_unregister {
+                root.delete_subkey_all(key.path).ok();
+            } else if let Ok(regkey) =
+                root.open_subkey_with_flags(key.path, winreg::enums::KEY_SET_VALUE)
+            {
+                for val in key.values {
+                    regkey.delete_value(val.0).ok();
+                }
+            }
         }
     }
 

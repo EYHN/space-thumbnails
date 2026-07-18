@@ -20,6 +20,7 @@ pub struct RegistryKey {
     pub root: RegistryRoot,
     pub path: String,
     pub values: Vec<RegistryValue>,
+    pub delete_key_on_unregister: bool,
 }
 
 impl RegistryKey {
@@ -28,6 +29,7 @@ impl RegistryKey {
             root: RegistryRoot::ClassesRoot,
             path,
             values,
+            delete_key_on_unregister: true,
         }
     }
 
@@ -36,6 +38,16 @@ impl RegistryKey {
             root: RegistryRoot::CurrentUser,
             path,
             values,
+            delete_key_on_unregister: true,
+        }
+    }
+
+    pub fn current_user_values(path: String, values: Vec<RegistryValue>) -> Self {
+        Self {
+            root: RegistryRoot::CurrentUser,
+            path,
+            values,
+            delete_key_on_unregister: false,
         }
     }
 }

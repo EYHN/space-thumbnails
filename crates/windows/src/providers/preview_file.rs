@@ -232,13 +232,10 @@ impl Provider for PreviewFileProvider {
                 RegistryData::Str(clsid.clone()),
             )],
         ));
-        result.push(RegistryKey::current_user(
-            format!(
-                "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PreviewHandlers\\{}",
-                clsid
-            ),
+        result.push(RegistryKey::current_user_values(
+            "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\PreviewHandlers".to_owned(),
             vec![RegistryValue(
-                "".to_owned(),
+                clsid,
                 RegistryData::Str("Space Thumbnails Preview Handler".to_owned()),
             )],
         ));
