@@ -53,6 +53,13 @@ fn main() {
             .unwrap()
     ));
     wix.push_str(&format!(
+        "        <File Id=\"StepConverterFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
+        project_dir
+            .join("target\\release\\space-thumbnails-step-converter.exe")
+            .to_str()
+            .unwrap()
+    ));
+    wix.push_str(&format!(
         "        <File Id=\"LicenceFile\" Source=\"{}\" Checksum=\"yes\"/>\n",
         assets_dir.join("Licence.rtf").to_str().unwrap()
     ));

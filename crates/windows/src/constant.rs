@@ -37,6 +37,16 @@ lazy_static! {
             ".3ds",
         )),
         Box::new(ThumbnailFileProvider::new(
+            GUID::from_u128(0x9478eb25_1452_44cc_8681_33b4f46a25e1),
+            ".step",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(ThumbnailFileProvider::new(
+            GUID::from_u128(0xc60eb957_9b20_42c9_81bf_25ff52e80a08),
+            ".stp",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(ThumbnailFileProvider::new(
             GUID::from_u128(0xd13b767b_a97f_4753_a4a3_7c7c15f6b25c),
             ".gltf",
             // issue: https://github.com/google/filament/issues/5432

@@ -1,5 +1,14 @@
 use core::panic;
-use std::{cell::Cell, ffi::OsStr, fs, path::Path, rc::Rc};
+use std::{
+    cell::Cell,
+    env,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use filament_bindings::{
     assimp::{post_process, AssimpAsset},
@@ -151,8 +160,25 @@ impl SpaceThumbnailsRenderer {
                 Some(filepath.as_ref()),
             )
         } else {
-            let asset =
-                AssimpAsset::from_file_with_flags(&mut self.engine, filepath, ASSIMP_FLAGS).ok()?;
+            let asset = match AssimpAsset::from_file_with_flags(
+                &mut self.engine,
+                filepath.as_ref(),
+                ASSIMP_FLAGS,
+            ) {
+                Ok(asset) => asset,
+                Err(_) if is_step_file(filepath.as_ref()) => {
+                    let mesh_path = convert_step_to_stl(filepath.as_ref())?;
+                    let asset = AssimpAsset::from_file_with_flags(
+                        &mut self.engine,
+                        &mesh_path,
+                        ASSIMP_FLAGS,
+                    )
+                    .ok()?;
+                    fs::remove_file(mesh_path).ok();
+                    asset
+                }
+                Err(_) => return None,
+            };
             self.load_assimp_asset(asset)
         }
     }
@@ -418,6 +444,96 @@ fn fit_into_unit_cube(bounds: &Aabb) -> Mat4f {
 
 fn is_base64_data_uri(uri: &str) -> bool {
     uri.starts_with("data:") && uri.find(";base64,").is_some()
+}
+
+fn is_step_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("step") || ext.eq_ignore_ascii_case("stp"))
+        .unwrap_or(false)
+}
+
+fn convert_step_to_stl(input_path: &Path) -> Option<PathBuf> {
+    let converter = find_step_converter()?;
+    let temp_dir = env::temp_dir();
+    let unique_id = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    let output_path = temp_dir.join(format!(
+        "space_thumbnails_step_{}_{}.stl",
+        std::process::id(),
+        unique_id
+    ));
+
+    let status = Command::new(converter)
+        .arg(input_path)
+        .arg(&output_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()?;
+
+    if status.success() && output_path.exists() {
+        Some(output_path)
+    } else {
+        fs::remove_file(output_path).ok();
+        None
+    }
+}
+
+fn find_step_converter() -> Option<PathBuf> {
+    const CONVERTER_EXE: &str = "space-thumbnails-step-converter.exe";
+
+    if let Some(path) = env::var_os("SPACE_THUMBNAILS_STEP_CONVERTER").map(PathBuf::from) {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    if let Some(paths) = env::var_os("PATH") {
+        for dir in env::split_paths(&paths) {
+            let candidate = dir.join(CONVERTER_EXE);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let candidate = dir.join(CONVERTER_EXE);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Some(path) = env::var_os("LOCALAPPDATA").map(|p| {
+        PathBuf::from(p)
+            .join("SpaceThumbnailsStep")
+            .join(CONVERTER_EXE)
+    }) {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    for root in [
+        env::var_os("ProgramFiles").map(|p| PathBuf::from(p).join("Space Thumbnails")),
+        env::var_os("ProgramFiles(x86)").map(|p| PathBuf::from(p).join("Space Thumbnails")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let candidate = root.join(CONVERTER_EXE);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
