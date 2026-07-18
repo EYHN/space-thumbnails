@@ -1,5 +1,14 @@
 use core::panic;
-use std::{cell::Cell, ffi::OsStr, fs, path::Path, rc::Rc};
+use std::{
+    cell::Cell,
+    env,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use filament_bindings::{
     assimp::{post_process, AssimpAsset},
@@ -40,6 +49,8 @@ pub struct SpaceThumbnailsRenderer {
     sunlight_entity: Entity,
     view: View,
     destory_asset: Option<Box<dyn FnOnce(&mut Engine, &mut Scene)>>,
+    root_entity: Option<Entity>,
+    root_transform: Option<Mat4f>,
 
     viewport: Viewport,
 }
@@ -137,6 +148,8 @@ impl SpaceThumbnailsRenderer {
                 sunlight_entity,
                 view,
                 destory_asset: None,
+                root_entity: None,
+                root_transform: None,
                 viewport,
             }
         }
@@ -151,8 +164,25 @@ impl SpaceThumbnailsRenderer {
                 Some(filepath.as_ref()),
             )
         } else {
-            let asset =
-                AssimpAsset::from_file_with_flags(&mut self.engine, filepath, ASSIMP_FLAGS).ok()?;
+            let asset = match AssimpAsset::from_file_with_flags(
+                &mut self.engine,
+                filepath.as_ref(),
+                ASSIMP_FLAGS,
+            ) {
+                Ok(asset) => asset,
+                Err(_) if is_step_file(filepath.as_ref()) => {
+                    let mesh_path = convert_step_to_stl(filepath.as_ref())?;
+                    let asset = AssimpAsset::from_file_with_flags(
+                        &mut self.engine,
+                        &mesh_path,
+                        ASSIMP_FLAGS,
+                    )
+                    .ok()?;
+                    fs::remove_file(mesh_path).ok();
+                    asset
+                }
+                Err(_) => return None,
+            };
             self.load_assimp_asset(asset)
         }
     }
@@ -188,6 +218,8 @@ impl SpaceThumbnailsRenderer {
             let root_entity = asset.get_root_entity();
             let root_transform_instance = transform_manager.get_instance(root_entity)?;
             transform_manager.set_transform_float(&root_transform_instance, &transform);
+            self.root_entity = Some(*root_entity);
+            self.root_transform = Some(transform);
 
             self.scene.add_entities(asset.get_renderables());
 
@@ -296,9 +328,12 @@ impl SpaceThumbnailsRenderer {
 
             let aabb = asset.get_bounding_box();
             let transform = fit_into_unit_cube(&aabb);
-            let root_transform_instance = transform_manager.get_instance(&asset.get_root())?;
+            let root_entity = asset.get_root();
+            let root_transform_instance = transform_manager.get_instance(&root_entity)?;
 
             transform_manager.set_transform_float(&root_transform_instance, &transform);
+            self.root_entity = Some(root_entity);
+            self.root_transform = Some(transform);
 
             self.scene.add_entities(asset.get_entities());
 
@@ -355,6 +390,21 @@ impl SpaceThumbnailsRenderer {
         byte_count
     }
 
+    pub fn set_model_y_rotation(&mut self, radians: f32) -> Option<&mut Self> {
+        unsafe {
+            let root_entity = self.root_entity?;
+            let root_transform = self.root_transform?;
+            let mut transform_manager = self.engine.get_transform_manager()?;
+            let root_transform_instance = transform_manager.get_instance(&root_entity)?;
+            transform_manager.set_transform_float(
+                &root_transform_instance,
+                &(Mat4f::rotation(radians, Float3::new(0.0, 1.0, 0.0)) * root_transform),
+            );
+        }
+
+        Some(self)
+    }
+
     pub fn get_size(&self) -> (u32, u32) {
         (self.viewport.width, self.viewport.height)
     }
@@ -368,6 +418,8 @@ impl SpaceThumbnailsRenderer {
         if let Some(destory) = destory_asset {
             destory(&mut self.engine, &mut self.scene)
         }
+        self.root_entity = None;
+        self.root_transform = None;
 
         self
     }
@@ -418,6 +470,96 @@ fn fit_into_unit_cube(bounds: &Aabb) -> Mat4f {
 
 fn is_base64_data_uri(uri: &str) -> bool {
     uri.starts_with("data:") && uri.find(";base64,").is_some()
+}
+
+fn is_step_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("step") || ext.eq_ignore_ascii_case("stp"))
+        .unwrap_or(false)
+}
+
+fn convert_step_to_stl(input_path: &Path) -> Option<PathBuf> {
+    let converter = find_step_converter()?;
+    let temp_dir = env::temp_dir();
+    let unique_id = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+    let output_path = temp_dir.join(format!(
+        "space_thumbnails_step_{}_{}.stl",
+        std::process::id(),
+        unique_id
+    ));
+
+    let status = Command::new(converter)
+        .arg(input_path)
+        .arg(&output_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()?;
+
+    if status.success() && output_path.exists() {
+        Some(output_path)
+    } else {
+        fs::remove_file(output_path).ok();
+        None
+    }
+}
+
+fn find_step_converter() -> Option<PathBuf> {
+    const CONVERTER_EXE: &str = "space-thumbnails-step-converter.exe";
+
+    if let Some(path) = env::var_os("SPACE_THUMBNAILS_STEP_CONVERTER").map(PathBuf::from) {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    if let Some(paths) = env::var_os("PATH") {
+        for dir in env::split_paths(&paths) {
+            let candidate = dir.join(CONVERTER_EXE);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let candidate = dir.join(CONVERTER_EXE);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Some(path) = env::var_os("LOCALAPPDATA").map(|p| {
+        PathBuf::from(p)
+            .join("SpaceThumbnailsStep")
+            .join(CONVERTER_EXE)
+    }) {
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    for root in [
+        env::var_os("ProgramFiles").map(|p| PathBuf::from(p).join("Space Thumbnails")),
+        env::var_os("ProgramFiles(x86)").map(|p| PathBuf::from(p).join("Space Thumbnails")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let candidate = root.join(CONVERTER_EXE);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

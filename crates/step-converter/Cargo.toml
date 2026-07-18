@@ -1,0 +1,7 @@
+[package]
+name = "space-thumbnails-step-converter"
+version = "1.0.1"
+edition = "2021"
+
+[dependencies]
+cadrum = { version = "0.8.16", default-features = false }

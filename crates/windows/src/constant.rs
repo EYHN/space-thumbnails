@@ -1,6 +1,6 @@
 use windows::core::GUID;
 
-use crate::providers::{Provider, ThumbnailFileProvider, ThumbnailProvider};
+use crate::providers::{PreviewFileProvider, Provider, ThumbnailFileProvider, ThumbnailProvider};
 
 lazy_static! {
     pub static ref PROVIDERS: Vec<Box<dyn Provider + 'static + Sync>> = vec![
@@ -37,6 +37,16 @@ lazy_static! {
             ".3ds",
         )),
         Box::new(ThumbnailFileProvider::new(
+            GUID::from_u128(0x9478eb25_1452_44cc_8681_33b4f46a25e1),
+            ".step",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(ThumbnailFileProvider::new(
+            GUID::from_u128(0xc60eb957_9b20_42c9_81bf_25ff52e80a08),
+            ".stp",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(ThumbnailFileProvider::new(
             GUID::from_u128(0xd13b767b_a97f_4753_a4a3_7c7c15f6b25c),
             ".gltf",
             // issue: https://github.com/google/filament/issues/5432
@@ -46,6 +56,66 @@ lazy_static! {
             GUID::from_u128(0x99ff43f0_d914_4a7a_8325_a8013995c41d),
             ".glb",
             // issue: https://github.com/google/filament/issues/5432
+            space_thumbnails::RendererBackend::OpenGL
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b001),
+            ".obj",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b002),
+            ".fbx",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b003),
+            ".stl",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b004),
+            ".dae",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b005),
+            ".ply",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b006),
+            ".x3d",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b007),
+            ".x3db",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b008),
+            ".3ds",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b009),
+            ".step",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b00a),
+            ".stp",
+            space_thumbnails::RendererBackend::Vulkan
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b00b),
+            ".gltf",
+            space_thumbnails::RendererBackend::OpenGL
+        )),
+        Box::new(PreviewFileProvider::new(
+            GUID::from_u128(0xfb39fb8e_76e7_4fbc_a8c6_2e16ad99b00c),
+            ".glb",
             space_thumbnails::RendererBackend::OpenGL
         ))
     ];

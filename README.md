@@ -1,6 +1,7 @@
 # Space Thumbnails
 
 Generates preview thumbnails for 3D model files. Provide a Windows Explorer extensions that adds preview thumbnails for 3D model files.
+Also provides Windows Explorer Preview Pane handlers with an animated Y-axis model preview.
 
 [![](https://img.shields.io/github/downloads/eyhn/space-thumbnails/total)](https://github.com/EYHN/space-thumbnails/releases)
 
@@ -16,6 +17,7 @@ Generates preview thumbnails for 3D model files. Provide a Windows Explorer exte
 - glTF2.0 (`.glb`/`.glTF`)
 - Extensible 3D (`.x3d`/`.x3db`)
 - 3D Studio Max 3DS (`.3ds`)
+- STEP CAD (`.step`/`.stp`)
 
 ## Windows Explorer Extensions
 

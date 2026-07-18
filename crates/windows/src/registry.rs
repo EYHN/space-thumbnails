@@ -9,10 +9,47 @@ pub enum RegistryData {
 #[derive(Debug)]
 pub struct RegistryValue(pub String, pub RegistryData);
 
+#[derive(Debug, PartialEq)]
+pub enum RegistryRoot {
+    ClassesRoot,
+    CurrentUser,
+}
+
 #[derive(Debug)]
 pub struct RegistryKey {
+    pub root: RegistryRoot,
     pub path: String,
     pub values: Vec<RegistryValue>,
+    pub delete_key_on_unregister: bool,
+}
+
+impl RegistryKey {
+    pub fn classes_root(path: String, values: Vec<RegistryValue>) -> Self {
+        Self {
+            root: RegistryRoot::ClassesRoot,
+            path,
+            values,
+            delete_key_on_unregister: true,
+        }
+    }
+
+    pub fn current_user(path: String, values: Vec<RegistryValue>) -> Self {
+        Self {
+            root: RegistryRoot::CurrentUser,
+            path,
+            values,
+            delete_key_on_unregister: true,
+        }
+    }
+
+    pub fn current_user_values(path: String, values: Vec<RegistryValue>) -> Self {
+        Self {
+            root: RegistryRoot::CurrentUser,
+            path,
+            values,
+            delete_key_on_unregister: false,
+        }
+    }
 }
 
 pub fn register_clsid(
@@ -21,9 +58,9 @@ pub fn register_clsid(
     disable_process_isolation: bool,
 ) -> Vec<RegistryKey> {
     vec![
-        RegistryKey {
-            path: format!("CLSID\\{{{:?}}}", clsid),
-            values: vec![
+        RegistryKey::classes_root(
+            format!("CLSID\\{{{:?}}}", clsid),
+            vec![
                 RegistryValue(
                     "".to_owned(),
                     RegistryData::Str("Model Thumbnail Handler".to_owned()),
@@ -33,16 +70,16 @@ pub fn register_clsid(
                     RegistryData::U32(if disable_process_isolation { 1 } else { 0 }),
                 ),
             ],
-        },
-        RegistryKey {
-            path: format!("CLSID\\{{{:?}}}\\InProcServer32", clsid),
-            values: vec![
+        ),
+        RegistryKey::classes_root(
+            format!("CLSID\\{{{:?}}}\\InProcServer32", clsid),
+            vec![
                 RegistryValue("".to_owned(), RegistryData::Str(module_path.to_owned())),
                 RegistryValue(
                     "ThreadingModel".to_owned(),
                     RegistryData::Str("Both".to_owned()),
                 ),
             ],
-        },
+        ),
     ]
 }
