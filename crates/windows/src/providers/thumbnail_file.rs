@@ -133,6 +133,16 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
 
         let filepath_clone = filepath.clone();
         let backend = self.backend;
+        let timeout = if filepath.ends_with(".step")
+            || filepath.ends_with(".STEP")
+            || filepath.ends_with(".stp")
+            || filepath.ends_with(".STP")
+        {
+            Duration::from_secs(30)
+        } else {
+            Duration::from_secs(5)
+        };
+
         let timeout_result = run_timeout(
             move || {
                 let mut renderer = SpaceThumbnailsRenderer::new(backend, size, size);
@@ -141,7 +151,7 @@ impl IThumbnailProvider_Impl for ThumbnailFileHandler {
                 renderer.take_screenshot_sync(screenshot_buffer.as_mut_slice());
                 Some(screenshot_buffer)
             },
-            Duration::from_secs(5),
+            timeout,
         );
 
         match timeout_result {
