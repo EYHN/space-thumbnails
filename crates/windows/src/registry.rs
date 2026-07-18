@@ -9,7 +9,7 @@ pub enum RegistryData {
 #[derive(Debug)]
 pub struct RegistryValue(pub String, pub RegistryData);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RegistryRoot {
     ClassesRoot,
     CurrentUser,

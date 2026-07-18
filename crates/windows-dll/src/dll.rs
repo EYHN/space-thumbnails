@@ -10,7 +10,7 @@ use windows::{
     },
 };
 use winreg::{
-    enums::HKEY_CURRENT_USER,
+    enums::{HKEY_CLASSES_ROOT, HKEY_CURRENT_USER},
     RegKey,
 };
 
@@ -140,6 +140,7 @@ pub unsafe extern "system" fn DllUnregisterServer() -> HRESULT {
 fn register(module_path: &str) -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register(module_path) {
+            let progid_key = associated_progid_key(&key);
             let (root, path) = match key.root {
                 RegistryRoot::ClassesRoot => (
                     RegKey::predef(HKEY_CURRENT_USER),
@@ -148,10 +149,19 @@ fn register(module_path: &str) -> std::io::Result<()> {
                 RegistryRoot::CurrentUser => (RegKey::predef(HKEY_CURRENT_USER), key.path),
             };
             let (regkey, _) = root.create_subkey(path)?;
-            for val in key.values {
-                match val.1 {
-                    RegistryData::Str(data) => regkey.set_value(val.0, &data)?,
-                    RegistryData::U32(data) => regkey.set_value(val.0, &data)?,
+            for val in &key.values {
+                match &val.1 {
+                    RegistryData::Str(data) => regkey.set_value(&val.0, data)?,
+                    RegistryData::U32(data) => regkey.set_value(&val.0, data)?,
+                }
+            }
+            if let Some(progid_key) = progid_key {
+                let (regkey, _) = RegKey::predef(HKEY_CURRENT_USER).create_subkey(progid_key)?;
+                for val in &key.values {
+                    match &val.1 {
+                        RegistryData::Str(data) => regkey.set_value(&val.0, data)?,
+                        RegistryData::U32(data) => regkey.set_value(&val.0, data)?,
+                    }
                 }
             }
         }
@@ -165,6 +175,7 @@ fn register(module_path: &str) -> std::io::Result<()> {
 fn unregister() -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register("") {
+            let progid_key = associated_progid_key(&key);
             let (root, path) = match key.root {
                 RegistryRoot::ClassesRoot => (
                     RegKey::predef(HKEY_CURRENT_USER),
@@ -177,12 +188,40 @@ fn unregister() -> std::io::Result<()> {
             } else if let Ok(regkey) =
                 root.open_subkey_with_flags(path, winreg::enums::KEY_SET_VALUE)
             {
-                for val in key.values {
-                    regkey.delete_value(val.0).ok();
+                for val in &key.values {
+                    regkey.delete_value(&val.0).ok();
                 }
+            }
+            if let Some(progid_key) = progid_key {
+                RegKey::predef(HKEY_CURRENT_USER)
+                    .delete_subkey_all(progid_key)
+                    .ok();
             }
         }
     }
 
     Ok(())
+}
+
+fn associated_progid_key(key: &space_thumbnails_windows::registry::RegistryKey) -> Option<String> {
+    if key.root != RegistryRoot::ClassesRoot {
+        return None;
+    }
+
+    let (extension, shellex_path) = key.path.split_once("\\ShellEx\\")?;
+    if !extension.starts_with('.') {
+        return None;
+    }
+
+    let classes = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(format!("Software\\Classes\\{}", extension))
+        .or_else(|_| RegKey::predef(HKEY_CLASSES_ROOT).open_subkey(extension))
+        .ok()?;
+    let progid: String = classes.get_value("").ok()?;
+    let progid = progid.trim();
+    if progid.is_empty() {
+        return None;
+    }
+
+    Some(format!("Software\\Classes\\{}\\ShellEx\\{}", progid, shellex_path))
 }
