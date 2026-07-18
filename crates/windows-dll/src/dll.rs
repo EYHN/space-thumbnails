@@ -9,9 +9,16 @@ use windows::{
         },
     },
 };
-use winreg::{enums::HKEY_CLASSES_ROOT, RegKey};
+use winreg::{
+    enums::{HKEY_CLASSES_ROOT, HKEY_CURRENT_USER},
+    RegKey,
+};
 
-use space_thumbnails_windows::{constant::PROVIDERS, providers::Provider, registry::RegistryData};
+use space_thumbnails_windows::{
+    constant::PROVIDERS,
+    providers::Provider,
+    registry::{RegistryData, RegistryRoot},
+};
 
 static mut DLL_INSTANCE: HINSTANCE = HINSTANCE(0);
 
@@ -133,8 +140,11 @@ pub unsafe extern "system" fn DllUnregisterServer() -> HRESULT {
 fn register(module_path: &str) -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register(module_path) {
-            let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
-            let (regkey, _) = hkcr.create_subkey(key.path)?;
+            let root = match key.root {
+                RegistryRoot::ClassesRoot => RegKey::predef(HKEY_CLASSES_ROOT),
+                RegistryRoot::CurrentUser => RegKey::predef(HKEY_CURRENT_USER),
+            };
+            let (regkey, _) = root.create_subkey(key.path)?;
             for val in key.values {
                 match val.1 {
                     RegistryData::Str(data) => regkey.set_value(val.0, &data)?,
@@ -152,8 +162,11 @@ fn register(module_path: &str) -> std::io::Result<()> {
 fn unregister() -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register("") {
-            let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
-            hkcr.delete_subkey_all(key.path).ok();
+            let root = match key.root {
+                RegistryRoot::ClassesRoot => RegKey::predef(HKEY_CLASSES_ROOT),
+                RegistryRoot::CurrentUser => RegKey::predef(HKEY_CURRENT_USER),
+            };
+            root.delete_subkey_all(key.path).ok();
         }
     }
 

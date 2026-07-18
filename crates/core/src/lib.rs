@@ -49,6 +49,8 @@ pub struct SpaceThumbnailsRenderer {
     sunlight_entity: Entity,
     view: View,
     destory_asset: Option<Box<dyn FnOnce(&mut Engine, &mut Scene)>>,
+    root_entity: Option<Entity>,
+    root_transform: Option<Mat4f>,
 
     viewport: Viewport,
 }
@@ -146,6 +148,8 @@ impl SpaceThumbnailsRenderer {
                 sunlight_entity,
                 view,
                 destory_asset: None,
+                root_entity: None,
+                root_transform: None,
                 viewport,
             }
         }
@@ -214,6 +218,8 @@ impl SpaceThumbnailsRenderer {
             let root_entity = asset.get_root_entity();
             let root_transform_instance = transform_manager.get_instance(root_entity)?;
             transform_manager.set_transform_float(&root_transform_instance, &transform);
+            self.root_entity = Some(*root_entity);
+            self.root_transform = Some(transform);
 
             self.scene.add_entities(asset.get_renderables());
 
@@ -322,9 +328,12 @@ impl SpaceThumbnailsRenderer {
 
             let aabb = asset.get_bounding_box();
             let transform = fit_into_unit_cube(&aabb);
-            let root_transform_instance = transform_manager.get_instance(&asset.get_root())?;
+            let root_entity = asset.get_root();
+            let root_transform_instance = transform_manager.get_instance(&root_entity)?;
 
             transform_manager.set_transform_float(&root_transform_instance, &transform);
+            self.root_entity = Some(root_entity);
+            self.root_transform = Some(transform);
 
             self.scene.add_entities(asset.get_entities());
 
@@ -381,6 +390,21 @@ impl SpaceThumbnailsRenderer {
         byte_count
     }
 
+    pub fn set_model_y_rotation(&mut self, radians: f32) -> Option<&mut Self> {
+        unsafe {
+            let root_entity = self.root_entity?;
+            let root_transform = self.root_transform?;
+            let mut transform_manager = self.engine.get_transform_manager()?;
+            let root_transform_instance = transform_manager.get_instance(&root_entity)?;
+            transform_manager.set_transform_float(
+                &root_transform_instance,
+                &(Mat4f::rotation(radians, Float3::new(0.0, 1.0, 0.0)) * root_transform),
+            );
+        }
+
+        Some(self)
+    }
+
     pub fn get_size(&self) -> (u32, u32) {
         (self.viewport.width, self.viewport.height)
     }
@@ -394,6 +418,8 @@ impl SpaceThumbnailsRenderer {
         if let Some(destory) = destory_asset {
             destory(&mut self.engine, &mut self.scene)
         }
+        self.root_entity = None;
+        self.root_transform = None;
 
         self
     }

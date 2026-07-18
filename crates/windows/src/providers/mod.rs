@@ -1,6 +1,8 @@
+mod preview_file;
 mod thumbnail;
 mod thumbnail_file;
 
+pub use preview_file::*;
 pub use thumbnail::*;
 pub use thumbnail_file::*;
 

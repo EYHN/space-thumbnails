@@ -51,17 +51,17 @@ impl Provider for ThumbnailFileProvider {
 
     fn register(&self, module_path: &str) -> Vec<crate::registry::RegistryKey> {
         let mut result = register_clsid(&self.clsid(), module_path, true);
-        result.append(&mut vec![RegistryKey {
-            path: format!(
+        result.append(&mut vec![RegistryKey::classes_root(
+            format!(
                 "{}\\ShellEx\\{{{:?}}}",
                 self.file_extension,
                 windows::Win32::UI::Shell::IThumbnailProvider::IID
             ),
-            values: vec![RegistryValue(
+            vec![RegistryValue(
                 "".to_owned(),
                 RegistryData::Str(format!("{{{:?}}}", &self.clsid())),
             )],
-        }]);
+        )]);
         result
     }
 

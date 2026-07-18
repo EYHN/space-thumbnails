@@ -3,7 +3,7 @@ mod build_support;
 use std::{env, fs, path::PathBuf, process::Command};
 
 use build_support::{download, run_command, unzip};
-use space_thumbnails_windows::constant::PROVIDERS;
+use space_thumbnails_windows::{constant::PROVIDERS, registry::RegistryRoot};
 
 fn main() {
     let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -70,9 +70,13 @@ fn main() {
     wix.push_str("        <util:EventSource EventMessageFile=\"[#MainDLLFile]\" Log=\"Application\" Name=\"Space Thumbnails\"/>\n");
 
     for key in registy_keys {
+        let root = match key.root {
+            RegistryRoot::ClassesRoot => "HKCR",
+            RegistryRoot::CurrentUser => "HKCU",
+        };
         wix.push_str(&format!(
-            "        <RegistryKey Root=\"HKCR\" Key=\"{}\">\n",
-            &key.path
+            "        <RegistryKey Root=\"{}\" Key=\"{}\">\n",
+            root, &key.path
         ));
         for val in key.values {
             let (val_type, val_data) = match val.1 {
