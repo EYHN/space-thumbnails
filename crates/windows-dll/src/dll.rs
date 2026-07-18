@@ -10,7 +10,7 @@ use windows::{
     },
 };
 use winreg::{
-    enums::{HKEY_CLASSES_ROOT, HKEY_CURRENT_USER},
+    enums::HKEY_CURRENT_USER,
     RegKey,
 };
 
@@ -31,7 +31,7 @@ fn get_module_path(instance: HINSTANCE) -> Result<String, HRESULT> {
     if path_len == 0 || path_len >= path.len() {
         return Err(E_FAIL);
     }
-    path.truncate(path_len + 1);
+    path.truncate(path_len);
     String::from_utf16(&path).map_err(|_| E_FAIL)
 }
 
@@ -140,11 +140,14 @@ pub unsafe extern "system" fn DllUnregisterServer() -> HRESULT {
 fn register(module_path: &str) -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register(module_path) {
-            let root = match key.root {
-                RegistryRoot::ClassesRoot => RegKey::predef(HKEY_CLASSES_ROOT),
-                RegistryRoot::CurrentUser => RegKey::predef(HKEY_CURRENT_USER),
+            let (root, path) = match key.root {
+                RegistryRoot::ClassesRoot => (
+                    RegKey::predef(HKEY_CURRENT_USER),
+                    format!("Software\\Classes\\{}", key.path),
+                ),
+                RegistryRoot::CurrentUser => (RegKey::predef(HKEY_CURRENT_USER), key.path),
             };
-            let (regkey, _) = root.create_subkey(key.path)?;
+            let (regkey, _) = root.create_subkey(path)?;
             for val in key.values {
                 match val.1 {
                     RegistryData::Str(data) => regkey.set_value(val.0, &data)?,
@@ -154,7 +157,7 @@ fn register(module_path: &str) -> std::io::Result<()> {
         }
     }
 
-    eventlog::register("Space Thumbnails").unwrap();
+    eventlog::register("Space Thumbnails").ok();
 
     Ok(())
 }
@@ -162,14 +165,17 @@ fn register(module_path: &str) -> std::io::Result<()> {
 fn unregister() -> std::io::Result<()> {
     for provider in PROVIDERS.iter() {
         for key in provider.register("") {
-            let root = match key.root {
-                RegistryRoot::ClassesRoot => RegKey::predef(HKEY_CLASSES_ROOT),
-                RegistryRoot::CurrentUser => RegKey::predef(HKEY_CURRENT_USER),
+            let (root, path) = match key.root {
+                RegistryRoot::ClassesRoot => (
+                    RegKey::predef(HKEY_CURRENT_USER),
+                    format!("Software\\Classes\\{}", key.path),
+                ),
+                RegistryRoot::CurrentUser => (RegKey::predef(HKEY_CURRENT_USER), key.path),
             };
             if key.delete_key_on_unregister {
-                root.delete_subkey_all(key.path).ok();
+                root.delete_subkey_all(path).ok();
             } else if let Ok(regkey) =
-                root.open_subkey_with_flags(key.path, winreg::enums::KEY_SET_VALUE)
+                root.open_subkey_with_flags(path, winreg::enums::KEY_SET_VALUE)
             {
                 for val in key.values {
                     regkey.delete_value(val.0).ok();
